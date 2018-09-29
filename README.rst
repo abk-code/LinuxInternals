@@ -249,3 +249,72 @@ threaded. There is no way 2 apps/threads will enter ioctl function paralelly.
     defines various priviledge levels. They are called CAP* constants.
     capable() kernel macro - within ioctl implementation can check for the
     privilege levels being allowed or not.
+
+
+Semaphores.
+###########
+
+    Semaphore value=0 means semaphore is locked.
+        value = 1, means semaphore is unlocked.
+
+    down_interruptible - will try to aquire the lock and if it doesn't get the
+    lock,it will go into interruptible wait state. It will create a wait-queue
+    and pcb for the calling context will be enqued to the wait-queue.
+
+    up() - in the write will make the semaphore available. (Unlock call of
+    semaphore).
+
+    The wait-queues that are part of semaphore are FIFO.  This type of locking
+    using semaphores is discouraged because can lead to confusion.
+
+completion locks: 
+Another way to let the callers block if the resource is not available.
+
+Wait-queue
+wait_event_interruptible - Will push the caller into interruptible wait state. Calling process's pcb is enqueued into wait-queue. wake_up_interruptible() is the routine to wake up. This will send a signal to all the PCBs that are in the wait-queue.
+
+async notifications
+#####################
+
+Linux provides a way that driver delivers messages to applications asynchronously. 
+
+#. Poll
+#. select
+
+    are 2 ways that applications can get the status of the device.
+
+    async is not used in all applications. When IO is not high priority, then
+    this method is used. This will require applicatons to register with driver
+    for async messages to be delivered.
+
+    Applications get SIGIO from the driver and they can handle with special
+    signal handler for SIGIO.
+
+    kill_fasync() of sending SIGIO can be put in Interrupt Servie Routine (ISR).
+
+    poll_wait() is a kernel routine that puts calling application into wait
+    state (in the wait queue).
+ 
+
+Introducing delays in kernel routines.
+#######################################
+
+For kernel debugging, we may need to introduce delays.
+
+#. Busy wait - Infinite loop and cpu is busy.
+
+#. Yield cpu time - schedule() to relinquish the cpu time and is often used. this doesn't waste the cpu cycles.
+
+#. Timeouts - How long we want to be in delay by providing expiry timer. Process resumes after timer expires.
+
+
+Interrupts
+###########
+
+    Hardware devices are connected to interrupt controller via special line
+    called IRQ. These devices are triggering interrupts using that IRQ line.
+    X86 provides 16 lines. You can have up to 256 lines. 
+
+    IRQ line assigned to particular to device need to be known to driver writer.
+    IRQ descriptor table is linked list of IRQ descriptor.
+
