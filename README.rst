@@ -318,3 +318,92 @@ Interrupts
     IRQ line assigned to particular to device need to be known to driver writer.
     IRQ descriptor table is linked list of IRQ descriptor.
 
+How interrupts work in Linux?
+#############################
+
+    do_irq() is function of process 0. Process 0 (kernel) will respond to
+    interrupt. Process 1 (init) is responsible for creation and management of
+    processes.
+
+    When interrupts occur, do_irq() queries the interrupt controller and
+    finds which IRQ line is triggered. Linux kernel configures do_irq() routine
+    as a default response function for all external interrupts. 
+
+    do_irq() is routine of process 0, which is responsible for allocation of
+    interrupt stack and invoking appropriate ISR routines. This interrupt stack
+    is of 2 types. If kernel is configured to use 8k stack, then there is no
+    separate stack. If kernel is configured with 4K stack, then interrupt stack
+    is allocated. With 4k, there will be performance hit. By default 8K is the
+    size of kernel stack. In Embedded linux and if there is a memory constraint
+    4K may be needed.
+
+
+#. Find interrupt request line on which interrupt signal was triggered (by querying interrupt controller).
+
+#. Lookup IRQ descriptor table for addresses of registered interrupt service routines.
+
+#. Invoke registered ISRs.
+
+#. Enable IRQ line.
+
+#. Execute other priority work. 
+    
+#. Invoke process scheduler. Until step6, process scheduler is disabled.
+
+    Interrupt latency is total time spent by the system in response to
+    interrupt. If interrupt latency is high, applications performance may be
+    impacted. High priority will starve since system is spending more time in
+    interrupts. One device may block other devices. When timer interrupt goes
+    off, other interrupts are disabled.
+
+Interrupt latency == Total amount of time system spends on the interrupt.
+
+Factors contributing to interrupt latency.
+******************************************
+
+#. H/W latency: Amount of time a processor is taking ack interrupt and invoke ISR.
+#. Kernel latency:  In Linux/Windows/or when process 0 is responding, how much time process 0 takes to start an ISR. This is called kernel latency.
+#.  ISR Latency: When ISR routine invoked, how much time it takes. ISR are usually referred as INterrupt handlers.
+#. Soft interrupt latency (bottom half).
+#. Scheduler latency.
+    - Check if any high pri tasks waiting in queue.
+    - Signal handlers for the signals pending.
+    - Giving cpu to high pri task.
+
+RTOS has fixed time latency for interrupts. GPOS do not have fixed time latency.
+
+
+For NIC, both reception and transmission of pkt will trigger an interrupt.
+
+pseudo-code for interrupt handler for NIC 
+###########################################
+
+#. reception of pkt (on network device).
+#. Allocate buffer to hold the packet.
+#. Copy from NIC buffer to kernel or vice-versa.
+#. Process the packet, specially phsyical header.
+#. Queue pkt handing over to upper protocol layers.
+
+While designing ISRs the following issues are to be considered.
+###############################################################
+
+Don't while writing ISR routine.
+********************************
+
+    #. Avoid calling dynamic memory allocation routines.
+    #. Avoid transferring data (synchronous) between 2 buffer blocks.
+    #. Avoid contending for access on global data structures because you need   to go through locks.
+    #. Avoid operations on user space addresses.
+    #. Avoid call to scheduler. While ISR is running scheduler is disabled. Hence a call to scheduler may result in deadlock and need to be avoided.
+    #. Avoid calls to operations which are non-atomic.
+
+Do's while writing ISR routine.
+*******************************
+
+#. Use pre-allocated buffers. (skb buffer in network drivers).
+#. Consider using per CPU data wherever needed.
+#. Consider using DMA whenever data needs to be transferred between device and memory.
+#. Identify non-critical work and use appropriate deferred routines to  execute them when system is idle or other scheduled time.
+
+If you are doing anything h/w specific within ISR is critical.
+Anything other than this is non-critical from Interrupt perspective.
