@@ -400,10 +400,10 @@ Don't while writing ISR routine.
 Do's while writing ISR routine.
 *******************************
 
-#. Use pre-allocated buffers. (skb buffer in network drivers).
-#. Consider using per CPU data wherever needed.
-#. Consider using DMA whenever data needs to be transferred between device and memory.
-#. Identify non-critical work and use appropriate deferred routines to  execute them when system is idle or other scheduled time.
+    #. Use pre-allocated buffers. (skb buffer in network drivers).
+    #. Consider using per CPU data wherever needed.
+    #. Consider using DMA whenever data needs to be transferred between device and memory.
+    #. Identify non-critical work and use appropriate deferred routines to  execute them when system is idle or other scheduled time.
 
 If you are doing anything h/w specific within ISR is critical.
 Anything other than this is non-critical from Interrupt perspective.
