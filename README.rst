@@ -39,11 +39,15 @@ Background
 
     DD in GPFS kernel is basically 2 pieces of code.
 
-        - Interface to the application (kernel specific) Need to be aware of kernel architecture.
-        - Hardware specific (device/bus specific). Need to be aware of how physically the h/w is connected to cpu. What protocol to use, directly connected ? via bus?
+        - Interface to the application (kernel specific) Need to be aware of
+          kernel architecture.
+
+        - Hardware specific (device/bus specific). Need to be aware of how
+          physically the h/w is connected to cpu. What protocol to use,
+          directly connected ? via bus?
     
-    Kernel specific driver can be implemented in 3 different ways
-    These are 3 different models / ways of writing code.
+    Kernel specific driver can be implemented in 3 different ways These are 3
+    different models / ways of writing code.
 
     1. Character driver approach (Sync devices).
     2. Block driver approach (Storage devices, flash, usb).
@@ -52,8 +56,8 @@ Background
 Char drivers
 ############### 
 
-Implemeted on all the devices where data exchange happens
-synchronously. For eg mouse, keyboard. Not used for bulk data transfer.
+Implemeted on all the devices where data exchange happens synchronously. For eg
+mouse, keyboard. Not used for bulk data transfer.
 
 Create a device file and allow the application to interact with the driver
 using file operations. Kernel is going to view the driver like FS (vfs_ops).
@@ -812,3 +816,270 @@ NUMA/Enterprise architectures.
 
     4. Processors also provide high speed data instructions caches to optimize
     program execution by mirroring program's data/instructions to cache.
+
+Memory Mapped IO (MMIO) Vs Port Mapped IO (PIO)
+###############################################
+
+    - PPIO:x86 They have port mapped IO.Separate set of instructions to read. In PC platform have 16 bit addressing.
+
+    - MMIO:risk (ARM etc) have memory mapped IO. While memory bus is used for IO as well.
+
+/proc/iomem - Details of memory mapped IO. Those devices that are memory mapped.
+/proc/ioports - Details of port mapped IO.
+
+Accessing port mapped devices from user space.
+**********************************************
+
+    1. Port mapped addresses can be accessed by applications of Linux and kernel space services (modules). 
+
+    2. Apps can access port mapped devices using either of the following ways.
+        2.1] RUnning as root application using ioperm() routines.
+        2.2] Using special device file using /dev/<..> - Will be disabled in
+        future. 
+
+
+Kernel space port mapped device access.
+**********************************************
+
+    1. From kernel - you do request_region() and seek permission. Modules
+    invoke request_region() routine to check for port access permissions and
+    aquire port resource.
+
+    2. Use kernel mode in/out family of functions for reads and writes on the
+    IO port.
+
+        3. Kernel APIs are* in[bwl], out[bwl] and string variants ins[bwl] and outs[bwl]
+
+    linux/ioport.h and kernel/resource.c - Audit files.
+
+What is a bus.
+******************
+
+    Bus = DAta path from transferring data between cpu and devices.
+
+    3 kinds of buses
+
+    1. Address bus  = Used to generate addresses.
+
+    2. Data bus (parallel lines to carry data) = Used to transfer data.
+
+    3. Control bus. = Used to transfer control signals. 
+
+    IO bus is connection between IO devices and CPU.
+
+Summary of PPIO
+***************
+
+PPIO can be done in 2 ways
+    From user space : 
+        ioperm/in/out family of functions
+        /dev/port - using driver's read write operations
+
+    From kernel space:
+        Using in/out family with request_region()
+        Using ioport_map() - New way.
+
+    No way to do memory mapped IO from userspace.
+
+Memory alignment.
+*****************
+
+    Refer Documentation/unaligned-memory-access.txt in kernel source.  
+    Memory alignment is storing data value at the address which is evenly
+    divisible by it's size. Unaligned data causes exceptions on some
+    architectures and is not supported on some archs. Intel x86 throws an
+    exception when un-aligned data operation is initiated.
+
+Block Device Drivers
+######################
+
+    Bulk and mass storage - they use block driver model for asynchronous mode.
+
+    Buffer/page cache - cache requested file's data is found. I/O request from
+    the application will be synchronous if the data is found in buffer cache.
+    If the I/O request doesn't find the data in the buffer/page cache, the
+    application is put to wait (block) and a request is made to block layer.
+
+    Block driver is per physical disk.
+    There are 2 types of block driver.
+
+            1. Logical block drivers - RAMDISK, emulation without physical device.
+
+        2. Physical block drivers with I/O scheduler. REquest queue will be
+        present between block layer and physical block driver that actually
+        talks to the disk.
+        
+    - vfs identifies block device as an instance of gendisk for block driver.
+    - vfs identifies char device as an instance of cdev for char device driver.
+
+    Number of bios involved in a request == number of contiguous sectors If
+    whole file falls physically in continuous sectors, then there will be just
+    one bio and num of bio_vec will be N number physically contiguous sectors.
+
+PCI and network drivers.
+#########################
+
+PCI is typically found in PCs but not found in SoCs or embedded.
+2 types of bridges exist.
+
+    - PCI to PCI bridge
+    - PCI to ISA bridge (PCI2eISA, PCI2PCMCIA etc).
+    
+    Each PCI device carries 256 bytes of configuration information with some
+    registers as part of an EEPROM/FIRMWARE. Inside device structure, configuration data is stored.
+
+        First 64 bytes region carries a general header (structure) that
+        provides details about device, class, vendor, status register, command
+        register, port and memory information and interrupt line number (IRQ
+        number). For all devices this header is common/required. REst will be
+        device specific registers.
+
+    - For each PCI bus, there will be a struct called pci_bus
+    - For each PCI device, there will be struct called pci_device
+
+        .. code:: bash
+
+         lspci -v will show the details of the pci.
+         00:02.0 VGA compatible controller
+         bus-id:device-id.function-id. Each PCI device can provide upto 7 functions.
+
+Steps involved in interaction with PCI devices
+***********************************************
+    1. Register with PCI bios.
+    2. Enable the device. (Push to wakeup state).
+    3. Probe device configuration. (IRQs, IO ports/memory regions).
+    4. Allocate resources.
+    5. Communicate with the device.
+
+Implementation of PCI NIC drivers (PCI and network code is new).
+*****************************************************************
+
+1. Register the driver with PCI subsystem (PCI bios).
+
+.. code:: bash
+             
+         pci_register_driver() - This function registers driver with PCI bios.
+    
+         2. static struct pci_driver nic_driver {
+        .name = "nicdriver",
+        .id_table = nic_idtable,
+        .probe = nic_probe,
+        .remove = nic_remove,
+    };
+
+    static int __init nic_init(void)
+    {
+        return pci_register_driver(&nic_driver);
+    }
+
+    static int __exit nic_cleanup(void)
+    {
+        pci_unregister_driver(&nic_driver);
+    }
+
+PCI bios invokes the probe routine of the registered driver when the physical device specified in found. Probe is callback() and called when device is physically there.
+What we do in the probe function?
+
+Major steps in NIC driver.
+*****************************
+
+    1. Carry out device initialization operations.
+        -  Enable the device using pci_enable_device()
+        -  Enable bus master ring (if available).
+            Bus master ring means, presence of DMA functionality. 
+            pci_set_master()
+        -  Extract IO/Memory information. 
+            - pci_resource_start()
+            - pci_resource_len()
+            - pci_request_regions()
+        
+        Verify if device's IO/Memory region is in use. 2 drivers should not use
+        same registers.  
+        Perform memory / IO mapping
+        pci_iomap, pci_map() etc.
+
+    2. Register the driver with appropriate subsystem. 
+
+        Incase of network driver register it with common device layer.
+
+        *Char driver register with VFS
+        Block driver registers with block layer and VFS (Optional)
+        Network driver registers with Common Netdevice Layer. Int n/w
+        terminology is called DLL. this comprises code for Mac layer and
+        physical layer.*
+
+   
+    3. Network drivers are not enumerated as device files.
+    (no VFS registration, no maj,min numbers).
+
+    4. Net drivers register as an instance of net_device with common net device
+    layer (CNDL)
+
+    5. ifconfig is a userspace tool that shows all registered net_device
+    objects.
+
+
+Steps of network driver registration.
+*************************************
+
+    Physical layer protocols define how frame needs to be created and
+    transmitted. (Eth, Wireless, FDDI etc)
+
+    1.  Wireless lan device driver, Eth driver etc  will register as net_device
+    irrespective of the MAC Protocol it's supporting. The network driver is
+    independent of physical layer protocol.
+
+        - Create an instance of type struct net_device. (alloc_netdev)
+          Initialize the fields with device specific configuration. net_device
+          instance uses a void pointer to refer to driver specific private
+          structure which usually contains driver configuration info. (includes
+          device usage statistics)
+
+        - Fill config data of network device to net_device fields.      (pdev,
+          iobase, reqs_len, irq etc)
+
+        - Initialize driver interface functions to function pointers of
+          net_device instance. Register net_device with CNDL. (Mandatory step).
+
+        ifconfig up eth0 << open will get from netdev_ops (structure that
+        contains function pointers).
+
+    2. Register ISR 
+
+    3. Allocate transmission and reception DMA buffers within nic_open().
+
+Important notes on addresses, DMA issues (bus,cpu,io)
+*****************************************************
+    
+    1. p = kmalloc() - which is page + offset (logical address).  CPU can
+       translate this into frame+offset (physical address) using TLB,
+       translation. But such allocation within NIC driver,  can't translate
+       this to physical address.
+
+    2. Whenever we need DMA, we need 2 addresses for the memory. One is
+       physical address and one is logical address. In X86 architecture bus
+       address, IO address and cpu addresses are same. Some archs like ARM etc,
+       such addresses do not match. Hence there is another chip called I/O MMU.
+
+    In PCI, DMA controller (bus master) is built-in. Pre-PCI, like ISA there
+    used to be another DMA controller. DMA is capability of device to take over
+    the address/data bus on the memory controller and drive transactions on it.
+
+DMA allocations
+****************
+    1. PHysical and logical addresses of the buffer.
+    2. Cache save buffers.
+
+    Devices can't use logical addresses which usually are return types of
+    kernel memory allocation routines (kmalloc).
+
+    - __pa(page+offset) will return  __va(frame+offset)
+    - __va(frame+offset) will return __pa(page+offset) 
+    
+        These can only be used in kernel space.
+
+    Logical addresses of DMA buffer need to be translated to physical
+    equivalents and configure the device controller with physical address.  In
+    few cases there could be probable side effects when DMA memory is cached in
+    CPU caches
+
