@@ -748,3 +748,67 @@ How the driver's mmap works?
     3. Set page reservation indicating that I/O activity should be disabled.
 
     4. Map physical address region to VMA instance.
+
+Direct Memory Access (DMA) - memory allocation and management.
+##############################################################
+
+    Bus specific mode etc - they require dma allocations.
+
+    Address translation using page tables. Newer Intel PAE extentions provide 36 bit addresses.  There are 3 patches    availble which breakup the virtual address space.
+
+    1. Each process carries it's own page table allocated by kernel at the
+    process load time.
+
+    2. Page tables contain entries mapping page to valid physical frame.
+
+        .. code:: bash
+
+            Valid   virtual-page    modified    protection page-frame 
+            1   140     1            RW     31
+            1   20      0            R X        38
+
+    
+         Each entry is called page table entry (PTE).
+
+    3. Processor's MMU (memory mgmt unit) at runtime looks up into page-table
+    to translate a logical address to physical address. And reference of
+    page-table is loaded into processor's register on every context switch.  
+
+Multi level paging: where it's used?
+####################################
+
+Linux uses 3-level paging on desktop/server arch and 4-level paging on
+NUMA/Enterprise architectures.
+
+#. Overhead / Limitation with page tables.
+    1. As the number of processes increase kernel needs to set aside around 3MB
+    of physical memory for each process to hold PTEs.
+
+    2. Page TAble Indirection is one approach where there is no wastage of
+    memory. Swap them out to disk when not required and swap in when required.
+    This approach is implemented in many ways. 2-level, 3-level paging etc are
+    different ways to manage page tables. The objective here is to enable page
+    tables dynamically extensible. 
+
+    3. Processor needs to spend 'n' amount of cycles looking up page-tables
+    before the actual operations on the memory can be executed.
+
+#. How to optimize
+    1. To optimize translation time, cpus provide specific cpu local buffers
+    called Translation Lookaside Buffer (TLBs).  
+
+    2. Processor < L1 < L2 < L3 < Memory  - 
+    Processor is fastest access.
+
+    3. TLBs can be managed in 2 ways
+    
+              - Kernel / software managed: In s/w managed mode each TLB missed
+                event triggers an exception which inturn is handled by kernel
+                by updating TLB entries from page-tables.
+    
+              - Hardware managed: In h/w managed mode each TLB miss event makes
+                processor jump into physical page table in memory and load
+                appropriate  entries into TLB.
+
+    4. Processors also provide high speed data instructions caches to optimize
+    program execution by mirroring program's data/instructions to cache.
