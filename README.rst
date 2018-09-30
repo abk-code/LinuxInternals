@@ -540,3 +540,74 @@ Tasklets.
 
     Tasklets = Dyanmic softirqs - concurrency. 
  
+
+    #. Built on top of softirqs
+    #. Represented by 2 softirqs, tasklet_struct structure
+    #. Created both statically and dynamically
+    #. Less restrictive sync routines.
+
+Steps involved in tasklets.
+***************************
+
+#. Declare tasklet
+
+    .. code:: bash
+
+         DECLARE_TASKLET(name,func, data)
+
+          OR
+
+         struct tasklet_struct mytasklet;
+         tasklet_init(mytasklet, func, data);
+
+#. Implement BH routine
+
+     .. code:: bash
+          
+             void func(unsigned long data);
+
+#. Schedule tasklet
+
+     .. code:: bash
+
+            tasklet_schedule(&mytasklet); <<< Low priority
+
+            OR
+
+            tasklet_hi_schedule(&mytasklet); <<< High priority - use if you want high.
+    
+#. When tasklets are run? - Execution policy.  Tasklets are executed using same policy that is applied for softirqs since interrupt subystem of kernel views a tasklet either instance of type high_softirq or tasklet_softirq.
+
+    Interrupt subsystem guarrantees the following with regards to execution of
+    tasklet. 
+
+#. Tasklets --- multithreaded analogue of BHs. (From interrupt.h file).
+
+   Main feature differing them of generic softirqs: tasklet is running only on one CPU simultaneously. Main feature differing them of BHs: different tasklets may be run simultaneously on different CPUs.
+
+Properties:
+************ 
+   * If tasklet_schedule() is called, then tasklet is guaranteed
+     to be executed on some cpu at least once after this.
+   * If the tasklet is already scheduled, but its execution is still not
+     started, it will be executed only once.
+   * If this tasklet is already running on another CPU (or schedule is called
+     from tasklet itself), it is rescheduled for later.
+   * Tasklet is strictly serialized wrt itself, but not
+     wrt another tasklets. If client needs some intertask synchronization,
+     he makes it with spinlocks.
+    
+    2 different tasklets between 2 different drivers can be run parallel and
+    there may be need for synchronization. Tasklets are strictly serialized but
+    not wrt to other tasklets. Inside a tasklet if you are accessing global
+    data structure, then locking is required. 
+
+    *They can be run in 3 different ways.*
+
+        3.1. softirq can run in the context of do_irq().
+
+        3.2. softirq can also run in the after spin_unlock_bh().
+        do_irq() can't run softirq, if the spin_lock_bh() is held.
+
+        3.3. Softirq may execute in the context of ksoftirqd (Per cpu kernel
+        thread). This is in process context of ksoftirqd - daemon. 
