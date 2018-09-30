@@ -611,3 +611,72 @@ Properties:
 
         3.3. Softirq may execute in the context of ksoftirqd (Per cpu kernel
         thread). This is in process context of ksoftirqd - daemon. 
+
+Workqueues
+***********
+    - Workqueues are 2.6 kernel only. Tasklets and Softirqs were there in 2.0.
+    - Workqueue are instances of work structure. 
+
+Timer bottomhalf 
+******************
+        - Executes whenever assigned timeout elapses.
+
+
+Memory management in Linux
+###########################
+
+There are 2 source directories for memory management.
+
+#. /usr/src/linux/mm - (Memory manager)
+#. /usr/src/linux/arch/i386/mm - (Memory initializer, runs at boottime) ppc/mm, mpis/mm, alpha/mm - Architecture specific source code in the kernel.
+
+Processor views memory in real-mode as single array. 
+Processor views memory in protected-mode as set of arrays/vectors. Each frame size is 4K.  The view changes depending on the type of mode.
+
+When does the shift from real to protected mode happens?
+
+*Different types of memory allocation algorithms.*
+**************************************************
+
+1. Page allocator : THis is primary memory allocator and source of memory.
+
+2. slab allocator : Odd size memory allocation and always returns physically contiguous memory.
+
+ .. code:: bash
+
+        kmalloc(),returns address and kfree(), frees addess.
+        Can be called from driver or kernel service.
+        /proc/slabinfo - can view the slab allocation details.
+
+ Slab allocation allows private cache (per driver/kernel service). Default allocators 
+ could be called from the cache list.
+
+ .. code:: bash
+
+        kmem_cache_create()
+            kmem_cache_alloc() 
+            kmem_cache_free()
+        kmem_cache_destroy()
+
+3. Cache allocator : Need to allocate data structures frequently. Reserver some pages as cache of objects so that drivers and FS can pre-create the  objs and use them. They are not available to application directly.
+
+4. Fragmented memory allocator: Odd size requests and source of allocation is from various fragments. It's used when allocation request size is large and not called from applications directly.
+
+5. Boot memory allocators: startup drivers, BSP drivers - they aquire memory using boot mem allocator.
+
+ .. code:: bash
+
+     include <linux/mempool.h>
+     pcb_task_struct_t, cdev etc - most of them are pre-allocated in pools.
+    
+Cache is reserving pages which will be used for allocating memory later. Memory pool, create a cache and allocate instances. Mem pool is based on cache. Scsi, usb drivers, network drivers etc which are frequenty used structures that are used for data transfer are created using memory pool.
+
+Slab layer allows kernel services to create memory pools that can be used for pre-allocation of specific objects.
+
+    1. Create a memory pool.
+    2. Aquiring an object from the pool.  (mempool_alloc)
+    3. Release the object (mempool_free)
+    4. Destroy the pool (mempool_destroy).
+    5. Destroy the cache (AFTER the pool destruction) - kmem_cache_destroy
+
+FS, protocol stack typically use this facility. Any request beyond > 128K - kmalloc() may fail. That is because 128K physically contigous block for kmalloc.  
