@@ -407,3 +407,67 @@ Do's while writing ISR routine.
 
 If you are doing anything h/w specific within ISR is critical.
 Anything other than this is non-critical from Interrupt perspective.
+
+Bottom Halves
+*************
+
+Linux has bottom halves or RTOS call BH as "deferred functions". Basically step 3 and 4 (processing and enque of the packets to higher layers) can be deferred and run. It need not be run with interrupts disabled on the cpu.
+
+.. code:: bash
+
+   ISR 
+   {
+     schedule_bh(func);
+   }
+
+   func()                //Soft IRQ. 
+   {
+     body;
+   }
+    
+Soft IRQ == Piece of code that runs with IRQ enabled but scheduler disabled. This is run in interrupt context. ISR terminates, IRQ enabled, scheduler enabled - Bottom half. Bottom half can be of 2 types. They can be running soft interrupts context.They are called Soft IRQs or Work queue.
+
+SOFTIRQs, TASKLET & WORKQUEUE
+#############################
+
+Soft IRQ, tasklet and workqueue are 3 ways to do deffered execution of a routine while servicing an interrupt. Non critical work can be scheduled.
+
+Linux 2.6 bottom halves.
+
+Soft IRQ: 
+*********
+
+It's a way where routine can be scheduled for deffered execution. It's available for static drivers and not dynamic drivers.  This is a bottom half which is runs with interrupts enabled, but pre-emption disabled. Refer include/linux/interrupt.h. All softirqs are instances of softirq_action structure. Maximum of 32 soft irqs.
+
+Execution of softirq
+**********************
+
+#. There are maximum 32 allowed softirqs. There is a per-cpu softirq list.  If ISR is running on cpu1, then softirq will run on cpu1 and so on.  When   raise_softirq() is called, specified softirq instance is enqued to the list of pending softirqs (per cpu). Both top-half and bottom-half need to be on same cpu otherwise there will be cache-line problem.
+
+#. Pending softirq list is cleared (run one by one) by do_irq() routine immediately AFTER isr is terminated with interrupt lines enabled. softirq run with pre-emption disabled but IRQ enabled. If interrupt goes off during softirq, then do_irq() is run as re-entrant and softirq will get pre-empted. Softirq pre-emption will happen for nested interrupts.
+
+#. Softirqs can be run in 3 different ways. 
+
+ - softirq can run in the context of do_irq(). 
+ - softirq can also run in the after spin_unlock_bh().
+        do_irq() can't run softirq, if the spin_lock_bh() is held.
+
+ - Softirq may execute in the context of ksoftirqd (Per cpu kernel
+        thread). This is in process context of ksoftirqd - daemon. 
+
+.. code:: bash
+
+    static int __init() my_init()
+    {
+        open_softirq(mysoftirq, func)
+        request_irq()
+    }
+
+    ISR {
+        raise_softirq(mysoftirq);
+    }
+
+    func {
+        ..
+        ..
+    } 
