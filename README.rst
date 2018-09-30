@@ -471,3 +471,72 @@ Execution of softirq
         ..
         ..
     } 
+
+Another example of softirq.
+***************************
+
+Both need to run on same cpu.
+
+.. code:: bash
+
+    func()
+    {
+        /* write to a list */
+        while(1)
+            raise_softirq(mysoftirq); <<< This is legal, though bad.
+    }
+
+    read() {
+        spin_lock_bh()
+        /* read from list */
+        spin_unlock_bh();
+    }
+
+
+Linux kernel allows softirq routine to reschedule itself within itself. It's possible to do raise_softirq() within softirq(). ksoftirqd - will also clear the pending softirqs when it gets the cpu slice.
+
+
+Question1: Why do we allow to reschedule softirq?
+**************************************************
+
+Consider 2 cpus as below
+
+.. code:: bash
+
+ cpu1.                          cpu2:
+ read()                         func() 
+ {                              {
+    spin_lock_bh()                  spin_lock_bh()
+    /*read from list */             /*write to the list */
+    spin_unlock_bh()                spin_unlock_bh()
+ }                              }
+
+Suppose cpu1 has aquired the lock and is reading from the list, and interrupt is delivered to cpu2. cpu2 has some bh (softirq) func() and it tries to aquire the lock. The spin_lock_bh() in func() is going to spin on the cpu2 for lock to become available. This cpu2 is in interrupt contextand going to waste cpu cycles which is not correct. Hence rescheduling of softirq is permitted from bh.
+
+Rescheduling bh is required to relinquish cpu from within bottom half whenc ritical resource (like lock) is rquired for bottom half execution is not available. 
+
+Question2: Will softirq (bh) can run on 2 cpus run paralely?
+**************************************************************
+
+Yes, because the interrupt can be delivered to different cpus.  Use appropriate mutual exclusion locks while writing softirqs. 
+
+
+Limitations of softirqs.
+*************************
+
+#. Softirqs are concurrent, i.e. same softirq could run on 'n' cpus paralelly.
+#. While implementing softirq code using mutual exclusion locks is mandatory wherever needed.
+#. Using locks in interrupt context code will result in variable interrupt latency. 
+
+These are the reasons why softirqs are not available for modules. Concurrent execution in bottom half, only then consider softirqs. 
+
+Tasklets.
+*********
+
+    It's a softirq where tasklet is guarrateed to be serial. Because of serial
+    execution,there is no need for locks. Tasklets are dyanmic softirqs that
+    can be used from within module drivers without concurrency.  They are
+    always executed serially.
+
+    Tasklets = Dyanmic softirqs - concurrency. 
+ 
