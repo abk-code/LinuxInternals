@@ -680,3 +680,71 @@ Slab layer allows kernel services to create memory pools that can be used for pr
     5. Destroy the cache (AFTER the pool destruction) - kmem_cache_destroy
 
 FS, protocol stack typically use this facility. Any request beyond > 128K - kmalloc() may fail. That is because 128K physically contigous block for kmalloc.  
+
+mmap, munmap
+############
+
+    Map IO cache buffer (from filesystem) into memory. 
+    If application uses MAP_ANONYMOUS, then filedes is not considered and
+    memory is mapped. Can be used on device files. 
+    open(/dev/file1) and then mmap().
+
+    (low memory zone, normal zone, highmem zone)
+    Implementing mmap callback in a character driver.
+    Anything above 896M is called high memory zone.
+    Process address space is also in normal zone (< 896M)
+
+    1. Each process in the user space aquires set of pages into which process
+    code, data and stack segments are mapped.
+
+    2. Process pcb in the kernel space carries details about pages allocated to
+    the process and segments to wihch they are mapped.
+    (Refer mm18)
+
+    For each process: (application)
+        - code segments go into few pages and need not be contiguous. Each vm_area_struct correspond to each contiguous segment.
+
+        - stack segments go into few pages
+
+        - data segments go into few pages. Each vm_area_struct correspond to each contiguous segment.
+
+    /proc/pid/maps will give each of these vm_area_structs (block).
+    block = set of pages
+
+How linux tracks mappings?
+****************************
+
+    1. mm_struct_instance contains reference to a list of virtual memory blocks
+    (vm_area_struct) that are mapped to application's code/data/stack segment.
+
+    2. Each instance of vm_area_struct represents one block of the process
+    address space.
+
+    3. mm_struct also carries reference to the process page table with valid
+    page table entries (PTEs). For protection reasons, we are mapping into
+    different segments.
+
+When mmap is called, what happens?
+************************************
+
+    1. Application's mmap request on a file invokes do_mmap kernel routine via
+    sys_mmap.
+
+    2. do_mmap() allocates new instance of struct vm_area_struct & fills it with
+    details of the new block attributes based on the arguments passed to mmap()
+    routine by the application. malloc() calls do_mmap(). This is a key routine.
+
+    3.do_mmap() invokes appropriate mmap support routine assigned to the file
+    operations (fops) instance for eg: fops_mmap().
+
+How the driver's mmap works?
+*****************************
+
+    1. Identify physical memory region (frames) that is required to be mapped.
+
+    2. Map physical memory region to kernel's logical address space which is
+    page+offset. [Physical memory == frame+offset].
+
+    3. Set page reservation indicating that I/O activity should be disabled.
+
+    4. Map physical address region to VMA instance.
