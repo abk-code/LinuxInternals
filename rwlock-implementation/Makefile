@@ -1,9 +1,10 @@
-CFLAGS=-pthread -g -c
+CFLAGS=-pthread -g 
 
-SOURCES=rwlock.c
+PROGRAMS=rwlock_main
+all:  ${PROGRAMS}
 
-rwlock.o: rwlock.c rwlock.h errors.h
-	${CC} ${CFLAGS} ${LDFLAGS} -o $@ rwlock.c
+rwlock_main: rwlock.c rwlock.h rwlock_main.c
+	${CC} ${CFLAGS} -o $@ rwlock_main.c rwlock.c
 
 clean:
 	@rm -rf $(PROGRAMS) *.o
